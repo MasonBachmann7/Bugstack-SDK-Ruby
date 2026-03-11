@@ -42,19 +42,16 @@ module Bugstack
     def start_worker
       debug = @debug
       Thread.new do
-        STDOUT.puts "[BugStack] Transport worker started (debug=#{debug})" if debug
-        STDOUT.flush if debug
+        warn "[BugStack] Transport worker started (debug=#{debug})" if debug
         loop do
           payload = @queue.pop
           break if payload == :stop
 
-          STDOUT.puts "[BugStack] Worker dequeued event, sending..." if debug
-          STDOUT.flush if debug
+          warn "[BugStack] Worker dequeued event, sending..." if debug
           send_with_retry(payload)
         end
       rescue Exception => e
-        STDOUT.puts "[BugStack] Worker thread crashed: #{e.class}: #{e.message}"
-        STDOUT.flush
+        warn "[BugStack] Worker thread crashed: #{e.class}: #{e.message}"
       end.tap { |t| t.name = "bugstack-transport" if t.respond_to?(:name=) }
     end
 
@@ -100,8 +97,7 @@ module Bugstack
     def log_debug(msg)
       return unless @debug
 
-      STDOUT.puts "[BugStack] #{msg}"
-      STDOUT.flush
+      warn "[BugStack] #{msg}"
     end
   end
 end
