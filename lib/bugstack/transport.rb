@@ -20,12 +20,20 @@ module Bugstack
     end
 
     # Add a payload to the send queue (non-blocking).
+    # Falls back to synchronous send if worker thread is dead.
     #
     # @param payload [Hash]
     def enqueue(payload)
       return if @shutdown
 
-      @queue << payload
+      # Check if worker thread is alive; if not (e.g. after fork), send synchronously
+      if @worker&.alive?
+        log_debug("Enqueuing to background thread")
+        @queue << payload
+      else
+        log_debug("Worker thread dead (pid=#{Process.pid}), sending synchronously")
+        send_with_retry(payload)
+      end
     rescue => e
       log_debug("Enqueue failed: #{e.message}")
     end
@@ -42,7 +50,7 @@ module Bugstack
     def start_worker
       debug = @debug
       Thread.new do
-        warn "[BugStack] Transport worker started (debug=#{debug})" if debug
+        warn "[BugStack] Transport worker started (pid=#{Process.pid})" if debug
         loop do
           payload = @queue.pop
           break if payload == :stop
@@ -74,7 +82,7 @@ module Bugstack
           response = http.request(request)
 
           if response.code.to_i < 400
-            log_debug("Event sent successfully")
+            log_debug("Event sent successfully (HTTP #{response.code})")
             return true
           end
 
