@@ -40,13 +40,21 @@ module Bugstack
     private
 
     def start_worker
+      debug = @debug
       Thread.new do
+        STDOUT.puts "[BugStack] Transport worker started (debug=#{debug})" if debug
+        STDOUT.flush if debug
         loop do
           payload = @queue.pop
           break if payload == :stop
 
+          STDOUT.puts "[BugStack] Worker dequeued event, sending..." if debug
+          STDOUT.flush if debug
           send_with_retry(payload)
         end
+      rescue Exception => e
+        STDOUT.puts "[BugStack] Worker thread crashed: #{e.class}: #{e.message}"
+        STDOUT.flush
       end.tap { |t| t.name = "bugstack-transport" if t.respond_to?(:name=) }
     end
 
@@ -75,7 +83,7 @@ module Bugstack
 
           log_debug("HTTP #{response.code} (attempt #{attempt + 1})")
         rescue => e
-          log_debug("Send failed (attempt #{attempt + 1}): #{e.message}")
+          log_debug("Send failed (attempt #{attempt + 1}): #{e.class}: #{e.message}")
         end
 
         # Exponential backoff: 1s, 2s, 4s
@@ -84,12 +92,16 @@ module Bugstack
 
       log_debug("Max retries exceeded, dropping event")
       false
+    rescue => e
+      log_debug("send_with_retry crashed: #{e.class}: #{e.message}")
+      false
     end
 
     def log_debug(msg)
       return unless @debug
 
-      warn "[BugStack] #{msg}"
+      STDOUT.puts "[BugStack] #{msg}"
+      STDOUT.flush
     end
   end
 end
